@@ -1,0 +1,188 @@
+service: alerting-scheduled-deletion-kms
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: nodejs16.x  
+  stage: dev
+  region: us-east-1
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action: 
+            - 'kms:CancelKeyDeletion'
+            - 'kms:EnableKey'
+          Resource: '*'
+
+functions:
+  remediationKmsDeletion:
+    handler: handler.handler
+
+params:
+  default:
+    SNSTopicName: alerting-scheduled-deletion-kms-${sls:stage}
+    DestinationEmailAddress: 'nadtakan.futhoem@gmail.com'
+    AutomationAssumeRole: 'arn:aws:iam::373456726732:role/AutomationAssumeRole'
+    EnableRemediation: true
+
+  dev:
+    SNSTopicName: alerting-scheduled-deletion-kms-${sls:stage}
+    DestinationEmailAddress: 'nadtakan.futhoem@gmail.com'
+  
+  prod:
+    SNSTopicName: alerting-scheduled-deletion-kms-${sls:stage}
+    DestinationEmailAddress: 'nadtakan.futhoem@gmail.com'
+
+resources:
+  Conditions:
+    EnableRemediation: 
+      Fn::Equals:
+        - ${param:EnableRemediation}
+        - 'true'
+    DoNotEnableRemediation:
+      Fn::Equals:
+        - ${param:EnableRemediation}
+        - 'false'
+
+  Resources:
+    SnsTopic:
+      Type: 'AWS::SNS::Topic'
+      Properties:
+        Subscription:
+          - Endpoint: ${param:DestinationEmailAddress}
+            Protocol: email
+        TopicName: ${param:SNSTopicName}
+
+    TopicPolicy:
+      Type: AWS::SNS::TopicPolicy
+      Properties: 
+        PolicyDocument: 
+          Version: '2012-10-17'
+          Statement:
+            - Sid: DefaultStatement
+              Effect: Allow
+              Principal:
+                Service:
+                  - events.amazonaws.com
+                  - cloudwatch.amazonaws.com
+                  - config.amazonaws.com
+                  - cloudformation.amazonaws.com
+              Action: 
+                - "SNS:GetTopicAttributes"
+                - "SNS:SetTopicAttributes"
+                - "SNS:AddPermission"
+                - "SNS:RemovePermission"
+                - "SNS:DeleteTopic"
+                - "SNS:Subscribe"
+                - "SNS:ListSubscriptionsByTopic"
+                - "SNS:Publish"
+                - "SNS:Receive"
+              Resource: !Ref SnsTopic
+              Condition:
+                StringEquals:
+                  "AWS:SourceOwner": !Ref 'AWS::AccountId'
+            - Sid: AllowEventRuletoPosttoSNSTopic
+              Effect: Allow
+              Principal: 
+                Service: "events.amazonaws.com"
+              Action: "sns:Publish"
+              Resource: !Ref SnsTopic
+        Topics: 
+          - !Ref SnsTopic
+
+    EventBridgeInvokeAutomationExecutionRole:
+      Condition: EnableRemediation
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service:
+                  - events.amazonaws.com
+              Action:
+                - sts:AssumeRole
+        Policies:
+          - PolicyName: EventBridgeInvokeAutomationExecutionPolicy
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - ssm:StartAutomationExecution
+                  Resource: !Sub "arn:aws:ssm:${AWS::Region}::automation-definition/AWSConfigRemediation-CancelKeyDeletion:$DEFAULT"
+                - Effect: Allow
+                  Action:
+                    - iam:PassRole
+                  Resource: ${param:AutomationAssumeRole} 
+                  Condition: 
+                    StringLikeIfExists: { "iam:PassedToService": "ssm.amazonaws.com" }
+
+    EventRule:
+      Type: 'AWS::Events::Rule'
+      Condition: DoNotEnableRemediation
+      Properties:
+        Name: KMS-CMK-Deletion-Alert
+        Description: 'The Rule to notify in case of deletion of a KMS key'
+        State: ENABLED
+        Targets:
+          - Arn: !Ref SnsTopic
+            Id: SNSTopic
+        EventPattern:
+          source:
+          - aws.kms
+          detail-type:
+          - AWS API Call via CloudTrail
+          detail:
+            eventSource:
+            - kms.amazonaws.com
+            eventName:
+            - ScheduleKeyDeletion
+
+    PermissionForEventsToInvokeLambda: 
+      Type: AWS::Lambda::Permission
+      DependsOn: RemediationKmsDeletionLambdaFunction
+      Properties: 
+        FunctionName: !GetAtt RemediationKmsDeletionLambdaFunction.Arn
+        Action: "lambda:InvokeFunction"
+        Principal: "events.amazonaws.com"
+        SourceArn: !Sub arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/KMS-CMK-Deletion-Notification-Remediation-Rule
+      
+    EventRuleWithRemediation:
+      Condition: EnableRemediation    
+      DependsOn: RemediationKmsDeletionLambdaFunction
+      Type: 'AWS::Events::Rule'
+      Properties:
+        Name: KMS-CMK-Deletion-Notification-Remediation-Rule
+        Description: 'The Rule to notify and remediate in case of deletion of a KMS key'
+        State: ENABLED
+        Targets:
+          - Arn: !Ref SnsTopic
+            Id: SNSTopic
+          - Arn: !Sub "arn:aws:ssm:${AWS::Region}::automation-definition/AWSConfigRemediation-CancelKeyDeletion:$DEFAULT"
+            Id: AWSConfigRemediation-CancelKeyDeletion
+            RoleArn: !GetAtt EventBridgeInvokeAutomationExecutionRole.Arn
+            InputTransformer: 
+              InputPathsMap:
+                KeyId: "$.detail.requestParameters.keyId"
+              InputTemplate: !Sub 
+                - |
+                  {
+                    "KeyId": [<KeyId>], 
+                    "AutomationAssumeRole": ["${AssumeRole}"]
+                  }
+                - AssumeRole: ${param:AutomationAssumeRole}
+          - Arn: !GetAtt RemediationKmsDeletionLambdaFunction.Arn
+            Id: TargetFunctionV1
+        EventPattern:
+          source:
+          - aws.kms
+          detail-type:
+          - AWS API Call via CloudTrail
+          detail:
+            eventSource:
+            - kms.amazonaws.com
+            eventName:
+            - ScheduleKeyDeletion

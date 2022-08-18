@@ -1,0 +1,70 @@
+{
+    "version": "0",
+    "id": "111a0f67-a108-ccd1-b497-bafd50245cb7",
+    "detail-type": "AWS API Call via CloudTrail",
+    "source": "aws.kms",
+    "account": "111111111111",
+    "time": "2022-08-18T00:02:38Z",
+    "region": "us-east-1",
+    "resources": [],
+    "detail": {
+        "eventVersion": "1.08",
+        "userIdentity": {
+            "type": "AssumedRole",
+            "principalId": "AROAVN46BNLGGPUAAY3DC:test.me@gmail.com",
+            "arn": "arn:aws:sts::111111111111:assumed-role/AWSReservedSSO_Dev_Account_Administrator_ef47db486dfc4573/test.me@gmail.com",
+            "accountId": "111111111111",
+            "accessKeyId": "AAAAAAAAAAAAAAAAAA",
+            "sessionContext": {
+                "sessionIssuer": {
+                    "type": "Role",
+                    "principalId": "AROAVN46BNLGGPUAAY3DC",
+                    "arn": "arn:aws:iam::111111111111:role/aws-reserved/sso.amazonaws.com/AWSReservedSSO_Dev_Account_Administrator_ef47db486dfc4573",
+                    "accountId": "111111111111",
+                    "userName": "AWSReservedSSO_Dev_Account_Administrator_ef47db486dfc4573"
+                },
+                "webIdFederationData": {},
+                "attributes": {
+                    "creationDate": "2022-08-17T23:12:39Z",
+                    "mfaAuthenticated": "false"
+                }
+            }
+        },
+        "eventTime": "2022-08-18T00:02:38Z",
+        "eventSource": "kms.amazonaws.com",
+        "eventName": "ScheduleKeyDeletion",
+        "awsRegion": "us-east-1",
+        "sourceIPAddress": "24.20.217.175",
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/104.0.0.0 Safari/537.36",
+        "requestParameters": {
+            "pendingWindowInDays": 30,
+            "keyId": "009e6811-bfb1-4192-9009-4eb1a276cb77"
+        },
+        "responseElements": {
+            "keyId": "arn:aws:kms:us-east-1:111111111111:key/009e6811-bfb1-4192-9009-4eb1a276cb77",
+            "deletionDate": "Sep 17, 2022, 12:02:38 AM",
+            "keyState": "PendingDeletion",
+            "pendingWindowInDays": 30
+        },
+        "requestID": "cef28b5a-01e6-457e-8cf1-205cb8aec3d5",
+        "eventID": "21414734-a3ff-426e-b87d-f0ac671c0127",
+        "readOnly": false,
+        "resources": [
+            {
+                "accountId": "111111111111",
+                "type": "AWS::KMS::Key",
+                "ARN": "arn:aws:kms:us-east-1:111111111111:key/009e6811-bfb1-4192-9009-4eb1a276cb77"
+            }
+        ],
+        "eventType": "AwsApiCall",
+        "managementEvent": true,
+        "recipientAccountId": "111111111111",
+        "eventCategory": "Management",
+        "tlsDetails": {
+            "tlsVersion": "TLSv1.3",
+            "cipherSuite": "TLS_AES_256_GCM_SHA384",
+            "clientProvidedHostHeader": "kms.us-east-1.amazonaws.com"
+        },
+        "sessionCredentialFromConsole": "true"
+    }
+}
